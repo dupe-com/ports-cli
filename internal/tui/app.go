@@ -264,7 +264,7 @@ func (m Model) statusBar() string {
 		case tabForwards:
 			left = m.fwds.keybar()
 		case tabTunnels:
-			left = "r refresh · ←/→ tabs · ? help · q quit"
+			left = strings.Join([]string{keyHint("r", "refresh"), keyHint("←/→", "tabs"), keyHint("?", "help"), keyHint("q", "quit")}, keySep)
 		}
 		return sStatusBar.Render(truncate(left, m.w))
 	}

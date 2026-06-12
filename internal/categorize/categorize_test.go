@@ -67,7 +67,7 @@ func TestBadges(t *testing.T) {
 }
 
 func TestRankOrdersMainCategoriesFirst(t *testing.T) {
-	order := []Category{Development, WebServer, Database, Messaging, System, Other}
+	order := []Category{Development, WebServer, Database, Messaging, Tunnel, System, Other}
 	for i := 1; i < len(order); i++ {
 		if order[i-1].Rank() >= order[i].Rank() {
 			t.Errorf("Rank(%s)=%d not < Rank(%s)=%d", order[i-1], order[i-1].Rank(), order[i], order[i].Rank())
@@ -76,7 +76,7 @@ func TestRankOrdersMainCategoriesFirst(t *testing.T) {
 }
 
 func TestNoise(t *testing.T) {
-	for _, c := range []Category{Development, WebServer, Database, Messaging} {
+	for _, c := range []Category{Development, WebServer, Database, Messaging, Tunnel} {
 		if c.Noise() {
 			t.Errorf("%s should not be noise", c)
 		}
@@ -84,6 +84,30 @@ func TestNoise(t *testing.T) {
 	for _, c := range []Category{System, Other} {
 		if !c.Noise() {
 			t.Errorf("%s should be noise", c)
+		}
+	}
+}
+
+func TestCarrierDefersToPortRule(t *testing.T) {
+	cases := []struct {
+		port uint32
+		name string
+		want Category
+	}{
+		// ssh -L of a dev server is a dev port, not a system daemon
+		{3000, "ssh", Development},
+		{5432, "ssh", Database},
+		{3000, "autossh", Development},
+		// carried port with no rule is a tunnel — visible, not noise
+		{8484, "ssh", Tunnel},
+		{54321, "ssh", Tunnel},
+		// sshd is a real daemon, not a carrier
+		{22, "sshd", System},
+		{1883, "mosquitto", Messaging}, // name rules still beat port rules for non-carriers
+	}
+	for _, c := range cases {
+		if got := Categorize(c.port, c.name, c.name); got != c.want {
+			t.Errorf("Categorize(%d, %q) = %s, want %s", c.port, c.name, got, c.want)
 		}
 	}
 }

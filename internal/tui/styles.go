@@ -36,6 +36,7 @@ var (
 		"WEB": lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#047857", Dark: "#6EE7B7"}),
 		"DB":  lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#B45309", Dark: "#FCD34D"}),
 		"MSG": lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#9D174D", Dark: "#F9A8D4"}),
+		"TUN": lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#67E8F9"}),
 		"SYS": lipgloss.NewStyle().Foreground(cDim),
 		"·":   lipgloss.NewStyle().Foreground(cDim),
 	}
@@ -51,6 +52,14 @@ var (
 	sStatusBar = lipgloss.NewStyle().Foreground(cDim)
 	sFlash     = lipgloss.NewStyle().Foreground(cOK).Bold(true)
 )
+
+// keyHint renders one status-bar hint: key in accent colour, label dimmed.
+func keyHint(key, label string) string {
+	return sAccent.Render(key) + sDim.Render(" "+label)
+}
+
+// keySep is the dimmed dot separator between hints.
+var keySep = sDim.Render(" · ")
 
 func badge(b string) string {
 	if st, ok := sBadge[b]; ok {

@@ -12,12 +12,13 @@ const (
 	WebServer   Category = "web"
 	Development Category = "dev"
 	Messaging   Category = "messaging"
+	Tunnel      Category = "tunnel"
 	System      Category = "system"
 	Other       Category = "other"
 )
 
 // All lists every category in display order.
-var All = []Category{Development, WebServer, Database, Messaging, System, Other}
+var All = []Category{Development, WebServer, Database, Messaging, Tunnel, System, Other}
 
 // Badge returns a short display label.
 func (c Category) Badge() string {
@@ -30,6 +31,8 @@ func (c Category) Badge() string {
 		return "DEV"
 	case Messaging:
 		return "MSG"
+	case Tunnel:
+		return "TUN"
 	case System:
 		return "SYS"
 	default:
@@ -49,10 +52,12 @@ func (c Category) Rank() int {
 		return 2
 	case Messaging:
 		return 3
-	case System:
+	case Tunnel:
 		return 4
-	default:
+	case System:
 		return 5
+	default:
+		return 6
 	}
 }
 
@@ -71,6 +76,8 @@ func (c Category) Title() string {
 		return "databases & caches"
 	case Messaging:
 		return "messaging & queues"
+	case Tunnel:
+		return "tunnels & forwards"
 	case System:
 		return "system daemons"
 	default:
@@ -89,6 +96,8 @@ func Parse(s string) (Category, bool) {
 		return Development, true
 	case "messaging", "msg", "queue":
 		return Messaging, true
+	case "tunnel", "tun":
+		return Tunnel, true
 	case "system", "sys":
 		return System, true
 	case "other":
@@ -136,8 +145,11 @@ var nameRules = []struct {
 	{"mitmproxy", Development}, {"mitmweb", Development}, {"jest", Development},
 	{"playwright", Development}, {"storybook", Development}, {"ollama", Development},
 
+	// tunnels & forwarders (ssh client is handled as a carrier in Categorize)
+	{"cloudflared", Tunnel},
+
 	// system daemons (macOS + linux staples)
-	{"sshd", System}, {"ssh", System}, {"launchd", System},
+	{"sshd", System}, {"launchd", System},
 	{"systemd", System}, {"controlce", System}, {"rapportd", System},
 	{"sharingd", System}, {"airplay", System}, {"mediasharingd", System},
 	{"cupsd", System}, {"bluetooth", System}, {"mdnsresponder", System},
@@ -163,15 +175,26 @@ var portRules = map[uint32]Category{
 	5174: Development, 8000: Development, 8080: Development, 8081: Development,
 	8888: Development, 9229: Development, 6006: Development, 1313: Development,
 	4321: Development, 19000: Development, 19006: Development,
-	8787: Development, 8788: Development,
+	8787: Development, 8788: Development, 8288: Development, 3333: Development,
 	// system
 	22: System, 53: System, 88: System, 445: System, 548: System,
 	631: System, 3689: System, 5000: System, 5900: System, 7000: System,
 }
 
+// carriers forward traffic for something else — their name says nothing about
+// what the port is for, so the port rule wins (an ssh -L of your dev server is
+// a dev port, not a system daemon). Unmatched carried ports are tunnels.
+var carriers = map[string]bool{"ssh": true, "autossh": true}
+
 // Categorize classifies a listener from its process name, cmdline, and port.
 func Categorize(port uint32, name, cmdline string) Category {
 	hay := strings.ToLower(name)
+	if carriers[hay] {
+		if c, ok := portRules[port]; ok {
+			return c
+		}
+		return Tunnel
+	}
 	for _, r := range nameRules {
 		if strings.Contains(hay, r.substr) {
 			return r.cat

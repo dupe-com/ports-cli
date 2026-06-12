@@ -356,11 +356,15 @@ func (t fwdTab) logsView(_, _ int) string {
 func (t fwdTab) keybar() string {
 	switch t.mode {
 	case fwdLogs:
-		return "↑/↓ scroll · r refresh · esc back"
+		return strings.Join([]string{keyHint("↑/↓", "scroll"), keyHint("r", "refresh"), keyHint("esc", "back")}, keySep)
 	case fwdForm:
-		return "tab next · enter start · esc cancel"
+		return strings.Join([]string{keyHint("tab", "next"), keyHint("enter", "start"), keyHint("esc", "cancel")}, keySep)
 	}
-	return "n new · enter start/logs · s save · D del saved · x stop · X remove · ? help"
+	return strings.Join([]string{
+		keyHint("n", "new"), keyHint("enter", "start/logs"),
+		keyHint("s", "save"), keyHint("D", "del saved"),
+		keyHint("x", "stop"), keyHint("X", "remove"), keyHint("?", "help"),
+	}, keySep)
 }
 
 func splitPorts(s string) []string {

@@ -792,11 +792,16 @@ func (t portsTab) confirmView() string {
 }
 
 func (t portsTab) keybar() string {
-	parts := []string{"/ filter", "space sel", "enter kill", "K kill-all", "y copy", "t tree", "a all", "d detail", "f fav", "w watch", "c cat", "r refresh"}
+	parts := []string{
+		keyHint("/", "filter"), keyHint("space", "sel"), keyHint("enter", "kill"),
+		keyHint("K", "kill-all"), keyHint("y", "copy"), keyHint("t", "tree"),
+		keyHint("a", "all"), keyHint("d", "detail"), keyHint("f", "fav"),
+		keyHint("w", "watch"), keyHint("c", "cat"), keyHint("r", "refresh"),
+	}
 	if t.paused {
-		parts = append(parts, sWarn.Render("p resume ⏸"))
+		parts = append(parts, sWarn.Render("p")+" "+sDim.Render("resume ⏸"))
 	} else {
-		parts = append(parts, "p pause")
+		parts = append(parts, keyHint("p", "pause"))
 	}
 	if t.treeView {
 		parts = append(parts, sAccent.Render("tree ✦"))
@@ -810,8 +815,8 @@ func (t portsTab) keybar() string {
 	if t.killing {
 		parts = append(parts, sWarn.Render("killing…"))
 	}
-	parts = append(parts, "? help")
-	return strings.Join(parts, " · ")
+	parts = append(parts, keyHint("?", "help"))
+	return strings.Join(parts, keySep)
 }
 
 // wrap soft-wraps s to width, keeping at most maxLines lines.
