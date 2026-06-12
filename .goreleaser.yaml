@@ -38,9 +38,8 @@ changelog:
   filters:
     exclude: ["^docs:", "^test:", "^chore:", "^ci:"]
 
-brews:
+homebrew_casks:
   - name: ports-cli
-    binary: ports
     repository:
       owner: dupe-com
       name: homebrew-tap
@@ -49,7 +48,10 @@ brews:
     homepage: https://github.com/dupe-com/ports-cli
     description: "Interactive TCP port manager — see what's listening, reclaim ports in one keypress"
     license: MIT
-    install: |
-      bin.install "ports"
-    test: |
-      system "#{bin}/ports", "--version"
+    # unsigned binary: strip Gatekeeper quarantine on install (goreleaser docs)
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ports"]
+          end
