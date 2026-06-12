@@ -64,6 +64,9 @@ func newPortsTab(cfg *config.Config) portsTab {
 
 func (t portsTab) captured() bool { return t.filtering || t.confirming }
 
+// consumesEsc: an applied (but unfocused) filter is something esc can clear.
+func (t portsTab) consumesEsc() bool { return t.filter.Value() != "" || t.catFilter != 0 }
+
 // ── data plumbing ──────────────────────────────────────────────────────────
 
 func (t portsTab) onScan(msg scanMsg) (portsTab, tea.Cmd) {
@@ -218,6 +221,12 @@ func (t portsTab) update(msg tea.KeyMsg) (portsTab, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "esc":
+		// clear applied filters (focused-filter esc is handled in updateFilter)
+		t.filter.SetValue("")
+		t.catFilter = 0
+		t.applyFilter()
+		t.clampCursor()
 	case "up", "k":
 		if t.cursor > 0 {
 			t.cursor--

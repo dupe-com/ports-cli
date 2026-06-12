@@ -129,6 +129,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+		case "esc":
+			// esc backs out of whatever is open first; at the top level it quits
+			if m.help {
+				m.help = false
+				return m, nil
+			}
+			if m.consumesEsc() {
+				return m.routeKey(msg)
+			}
+			return m, tea.Quit
 		case "?":
 			m.help = !m.help
 			return m, nil
@@ -163,6 +173,18 @@ func (m Model) switchTab(delta int) (tea.Model, tea.Cmd) {
 		return m, detectTunnelsCmd
 	}
 	return m, nil
+}
+
+// consumesEsc reports whether the active tab still has something for esc to
+// back out of (an applied filter, a logs view); when false, esc quits.
+func (m Model) consumesEsc() bool {
+	switch m.tab {
+	case tabPorts:
+		return m.ports.consumesEsc()
+	case tabForwards:
+		return m.fwds.consumesEsc()
+	}
+	return false
 }
 
 // captured reports whether the active tab has a focused input/modal that
@@ -253,7 +275,7 @@ func (m Model) helpView() string {
 	rows := [][2]string{
 		{"←/→, tab, 1/2/3", "switch tabs"},
 		{"?", "toggle help"},
-		{"q, ctrl+c", "quit"},
+		{"q, esc, ctrl+c", "quit (esc backs out of filters/views first)"},
 		{"", ""},
 		{"Ports", ""},
 		{"↑/↓, j/k", "move · g/G top/bottom"},

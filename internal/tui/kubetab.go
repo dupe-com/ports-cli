@@ -61,6 +61,9 @@ func (t *fwdTab) setSize(w, h int) {
 
 func (t fwdTab) captured() bool { return t.mode == fwdForm }
 
+// consumesEsc: the logs view uses esc to go back to the list.
+func (t fwdTab) consumesEsc() bool { return t.mode == fwdLogs }
+
 func (t fwdTab) update(msg tea.KeyMsg) (fwdTab, tea.Cmd) {
 	switch t.mode {
 	case fwdForm:
