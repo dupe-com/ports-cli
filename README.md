@@ -16,6 +16,15 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
 </p>
 
+<p align="center">
+  <a href="#install">Install</a> •
+  <a href="#features">Features</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#configuration">Configuration</a> •
+  <a href="#how-it-works">How it works</a> •
+  <a href="#development">Development</a>
+</p>
+
 ---
 
 You run `bun dev` and ports 3000, 3001, and 8484 are "in use". By what?
@@ -33,6 +42,22 @@ screen and clears it in one keypress.
 
   / filter · space sel · enter kill · d detail · f fav · w watch · c cat · r refresh
 ```
+
+## Install
+
+```sh
+# Homebrew (macOS / Linux)
+brew install dupe-com/tap/ports-cli
+
+# Go
+go install github.com/dupe-com/ports-cli/cmd/ports@latest
+
+# curl (downloads the right release binary to /usr/local/bin)
+curl -fsSL https://raw.githubusercontent.com/dupe-com/ports-cli/main/install.sh | sh
+```
+
+Or grab a binary from [Releases](https://github.com/dupe-com/ports-cli/releases).
+Every method installs the binary as **`ports`**.
 
 ## Features
 
@@ -55,22 +80,6 @@ screen and clears it in one keypress.
   named or quick, with its origin and config.
 - 🤖 **Scriptable** — every feature has a flag-driven subcommand with
   `--json` output where it matters.
-
-## Install
-
-```sh
-# Homebrew (macOS / Linux)
-brew install dupe-com/tap/ports-cli
-
-# Go
-go install github.com/dupe-com/ports-cli/cmd/ports@latest
-
-# curl (downloads the right release binary to /usr/local/bin)
-curl -fsSL https://raw.githubusercontent.com/dupe-com/ports-cli/main/install.sh | sh
-```
-
-Or grab a binary from [Releases](https://github.com/dupe-com/ports-cli/releases).
-Every method installs the binary as **`ports`**.
 
 ## Usage
 
