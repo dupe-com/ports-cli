@@ -48,7 +48,7 @@ func (t tunsTab) update(msg tea.KeyMsg) (tunsTab, tea.Cmd) {
 	return t, nil
 }
 
-func (t tunsTab) view(w, h int) string {
+func (t tunsTab) view(w, _ int) string {
 	if t.err != "" {
 		return sDanger.Render("detect error: " + t.err)
 	}

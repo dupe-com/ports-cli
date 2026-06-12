@@ -9,6 +9,16 @@ linters:
   settings:
     staticcheck:
       checks: ["all", "-ST1000"] # no package-comment-on-every-file nag
+    errcheck:
+      # CLI output to cobra's Out/Err writers — checking every Fprintf to
+      # stdout is pure noise; write failures there aren't actionable.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    misspell:
+      ignore-rules:
+        - mosquitto # the MQTT broker, not the insect
 
 issues:
   max-issues-per-linter: 0

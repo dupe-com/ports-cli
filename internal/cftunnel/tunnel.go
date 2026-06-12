@@ -44,7 +44,7 @@ func (t Tunnel) Uptime() string {
 	case d < time.Minute:
 		return "<1m"
 	case d < time.Hour:
-		return time.Duration(d.Round(time.Minute)).String()
+		return d.Round(time.Minute).String()
 	default:
 		return d.Round(time.Hour).String()
 	}

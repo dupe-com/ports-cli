@@ -193,7 +193,7 @@ func (t fwdTab) view(w, h int) string {
 	return t.listView(w, h)
 }
 
-func (t fwdTab) listView(w, h int) string {
+func (t fwdTab) listView(w, _ int) string {
 	sessions := t.mgr.List()
 	if len(sessions) == 0 {
 		return sDim.Render("\n  no kubectl port-forward sessions — press " +
@@ -251,7 +251,7 @@ func (t fwdTab) formView() string {
 	return sModal.Render(b.String())
 }
 
-func (t fwdTab) logsView(w, h int) string {
+func (t fwdTab) logsView(_, _ int) string {
 	s, ok := t.mgr.Get(t.logsFor)
 	if !ok {
 		return sDim.Render("session gone")

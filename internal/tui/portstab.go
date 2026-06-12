@@ -504,8 +504,7 @@ func (t portsTab) confirmView() string {
 		shown = shown[:8]
 	}
 	for _, l := range shown {
-		b.WriteString(fmt.Sprintf("  :%d  %s (pid %d, %s)\n",
-			l.Port, l.Name, l.PID, l.User))
+		fmt.Fprintf(&b, "  :%d  %s (pid %d, %s)\n", l.Port, l.Name, l.PID, l.User)
 	}
 	if extra := len(t.pending) - len(shown); extra > 0 {
 		b.WriteString(sDim.Render(fmt.Sprintf("  … and %d more\n", extra)))

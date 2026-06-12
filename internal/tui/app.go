@@ -217,12 +217,12 @@ func (m Model) View() string {
 	body = lipgloss.NewStyle().Height(bodyH).MaxHeight(bodyH).Render(body)
 
 	status := m.statusBar()
-	out := lipgloss.JoinVertical(lipgloss.Left, header, body, status)
-
 	if m.help {
-		return overlay(out, m.helpView(), m.w, m.h)
+		// full-replace overlay: bubbletea has no compositing, and dimming
+		// the background costs more than it's worth
+		return lipgloss.Place(m.w, m.h, lipgloss.Center, lipgloss.Center, m.helpView())
 	}
-	return out
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, status)
 }
 
 func (m Model) statusBar() string {
@@ -277,16 +277,10 @@ func (m Model) helpView() string {
 			b.WriteString(sHeader.Render(r[0]) + "\n")
 			continue
 		}
-		b.WriteString(fmt.Sprintf("  %s  %s\n", sAccent.Render(pad(r[0], 16)), r[1]))
+		fmt.Fprintf(&b, "  %s  %s\n", sAccent.Render(pad(r[0], 16)), r[1])
 	}
 	b.WriteString("\n" + sDim.Render("press any key to close"))
 	return sModal.Render(b.String())
-}
-
-// overlay centers box on top of base (simple full-replace overlay — bubbletea
-// has no compositing, and dimming the background costs more than it's worth).
-func overlay(base, box string, w, h int) string {
-	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box)
 }
 
 func pad(s string, n int) string {
