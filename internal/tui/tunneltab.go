@@ -55,7 +55,9 @@ func (t tunsTab) view(w, _ int) string {
 	if len(t.tunnels) == 0 {
 		return sDim.Render("\n  no cloudflared processes detected\n\n" +
 			"  named tunnel:  cloudflared tunnel run <name>\n" +
-			"  quick tunnel:  cloudflared tunnel --url http://localhost:3000")
+			"  quick tunnel:  cloudflared tunnel --url http://localhost:3000\n\n" +
+			"  cloudflared dials out to Cloudflare's edge, so tunnels never\n" +
+			"  appear as listening ports — this tab is how you see them")
 	}
 	head := fmt.Sprintf("  %-8s %-7s %-20s %-28s %-8s %s",
 		"PID", "MODE", "NAME", "ORIGIN/HOSTNAME", "UP", "CONFIG")

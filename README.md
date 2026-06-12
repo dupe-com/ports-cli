@@ -32,7 +32,7 @@ An orphaned SSH tunnel? Yesterday's dev server? `ports` answers in one
 screen and clears it in one keypress.
 
 ```
- 1 Ports    2 Forwards    3 Tunnels
+ 1 Ports    2 kubectl    3 cloudflared
 
    PORT    CAT  PID      USER     UPTIME  ADDR      COMMAND
   ▸3000    DEV  7881     ramin    17h     *         node — next dev
@@ -91,7 +91,7 @@ ports
 
 | Key | Action |
 | --- | --- |
-| `1` `2` `3` / `tab` | switch tabs (Ports / Forwards / Tunnels) |
+| `1` `2` `3` / `tab` | switch tabs (Ports / kubectl / cloudflared) |
 | `↑↓` `j` `k` | move · `g`/`G` top/bottom |
 | `/` | fuzzy filter (esc clears) |
 | `c` | cycle category filter |
@@ -100,7 +100,7 @@ ports
 | `d` | detail pane (full cmdline, all ports held by the pid) |
 | `f` / `w` | toggle favorite ★ / watched 👁 |
 | `r` / `p` | refresh now / pause auto-refresh |
-| `n` | (Forwards) new kubectl port-forward |
+| `n` | (kubectl tab) new managed port-forward |
 | `?` | help |
 
 ### CLI

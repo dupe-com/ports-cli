@@ -21,7 +21,10 @@ const (
 	tabCount
 )
 
-var tabNames = [tabCount]string{"Ports", "Forwards", "Tunnels"}
+// Tab names say exactly what each covers: everything listening locally vs
+// kubectl port-forwards this app manages vs detected cloudflared processes
+// (which dial out and never show up in a port scan).
+var tabNames = [tabCount]string{"Ports", "kubectl", "cloudflared"}
 
 // Model is the root bubbletea model.
 type Model struct {
@@ -292,14 +295,14 @@ func (m Model) helpView() string {
 		{"w", "toggle watch 👁 (notify on change)"},
 		{"r / p", "refresh now / pause auto-refresh"},
 		{"", ""},
-		{"Forwards", ""},
+		{"kubectl — port-forwards managed by this app", ""},
 		{"n", "new kubectl port-forward"},
 		{"enter / l", "start saved spec / view session logs"},
 		{"s", "save session spec for later"},
 		{"D", "delete saved spec"},
 		{"x / X", "stop session / remove from list"},
 		{"", ""},
-		{"Tunnels", ""},
+		{"cloudflared — detected Cloudflare Tunnels (view-only)", ""},
 		{"r", "re-detect cloudflared processes"},
 	}
 	var b strings.Builder

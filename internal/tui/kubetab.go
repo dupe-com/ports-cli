@@ -276,8 +276,11 @@ func (t fwdTab) view(w, h int) string {
 func (t fwdTab) listView(w, _ int) string {
 	items := t.buildItems()
 	if len(items) == 0 {
-		return sDim.Render("\n  no kubectl port-forward sessions — press " +
-			sAccent.Render("n") + sDim.Render(" to create one\n\n  sessions live as children of this TUI and auto-reconnect on drop"))
+		return sDim.Render("\n  no kubectl port-forward sessions — press ") +
+			sAccent.Render("n") + sDim.Render(" to create one") +
+			sDim.Render("\n\n  this tab is only for forwards ports-cli starts and manages itself\n"+
+				"  (auto-reconnect on drop, logs, status) — ssh forwards and other\n"+
+				"  listeners you created elsewhere show up in the Ports tab")
 	}
 	head := fmt.Sprintf("  %-12s %-26s %-14s %-10s %-8s %-8s %s",
 		"STATUS", "TARGET", "PORTS", "NS", "CTX", "UP", "RESTARTS")
