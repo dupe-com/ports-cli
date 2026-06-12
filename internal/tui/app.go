@@ -141,18 +141,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "3":
 			m.tab = tabTunnels
 			return m, detectTunnelsCmd
-		case "tab":
-			m.tab = (m.tab + 1) % tabCount
-			if m.tab == tabTunnels {
-				return m, detectTunnelsCmd
-			}
-			return m, nil
+		case "tab", "right":
+			return m.switchTab(+1)
+		case "shift+tab", "left":
+			return m.switchTab(-1)
 		}
 		if m.help {
 			m.help = false // any other key dismisses help
 			return m, nil
 		}
 		return m.routeKey(msg)
+	}
+	return m, nil
+}
+
+// switchTab moves delta tabs (wrapping) and kicks off a tunnel re-detect
+// when landing on the Tunnels tab.
+func (m Model) switchTab(delta int) (tea.Model, tea.Cmd) {
+	m.tab = (m.tab + delta + tabCount) % tabCount
+	if m.tab == tabTunnels {
+		return m, detectTunnelsCmd
 	}
 	return m, nil
 }
@@ -234,7 +242,7 @@ func (m Model) statusBar() string {
 		case tabForwards:
 			left = m.fwds.keybar()
 		case tabTunnels:
-			left = "r refresh · 1/2/3 tabs · ? help · q quit"
+			left = "r refresh · ←/→ tabs · ? help · q quit"
 		}
 		return sStatusBar.Render(truncate(left, m.w))
 	}
@@ -243,7 +251,7 @@ func (m Model) statusBar() string {
 
 func (m Model) helpView() string {
 	rows := [][2]string{
-		{"1 / 2 / 3, tab", "switch tabs"},
+		{"←/→, tab, 1/2/3", "switch tabs"},
 		{"?", "toggle help"},
 		{"q, ctrl+c", "quit"},
 		{"", ""},
@@ -253,7 +261,7 @@ func (m Model) helpView() string {
 		{"c", "cycle category filter"},
 		{"space", "multi-select"},
 		{"enter, x", "kill (confirm: y graceful · F force)"},
-		{"d", "toggle detail pane"},
+		{"d", "hide/show detail pane (shown by default)"},
 		{"f", "toggle favorite ★"},
 		{"w", "toggle watch 👁 (notify on change)"},
 		{"r / p", "refresh now / pause auto-refresh"},

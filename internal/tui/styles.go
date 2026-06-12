@@ -11,10 +11,14 @@ var (
 	cOK      = lipgloss.AdaptiveColor{Light: "#047857", Dark: "#34D399"}
 	cBadgeBG = lipgloss.AdaptiveColor{Light: "#EDE9FE", Dark: "#312E81"}
 
+	// Tabs share one shape — same underline, same padding — and differ only
+	// in color: accent when active, gray/dormant otherwise.
 	sTabActive = lipgloss.NewStyle().Bold(true).Foreground(cAccent).
 			Border(lipgloss.NormalBorder(), false, false, true, false).
 			BorderForeground(cAccent).Padding(0, 2)
-	sTab = lipgloss.NewStyle().Foreground(cDim).Padding(0, 2)
+	sTab = lipgloss.NewStyle().Foreground(cDim).
+		Border(lipgloss.NormalBorder(), false, false, true, false).
+		BorderForeground(cDim).Padding(0, 2)
 
 	sHeader   = lipgloss.NewStyle().Bold(true).Foreground(cDim)
 	sCursor   = lipgloss.NewStyle().Bold(true).Background(cBadgeBG).Foreground(cText)

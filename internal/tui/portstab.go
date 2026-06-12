@@ -58,6 +58,7 @@ func newPortsTab(cfg *config.Config) portsTab {
 		filter:     ti,
 		selected:   map[rowKey]bool{},
 		watchState: map[uint32]bool{},
+		showDetail: true, // visible by default; d hides it
 	}
 }
 
