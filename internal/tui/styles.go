@@ -33,7 +33,6 @@ var (
 	sWarn     = lipgloss.NewStyle().Foreground(cWarn)
 	sDanger   = lipgloss.NewStyle().Foreground(cDanger).Bold(true)
 	sAccent   = lipgloss.NewStyle().Foreground(cAccent)
-	sStar     = lipgloss.NewStyle().Foreground(cWarn)
 
 	sBadge = map[string]lipgloss.Style{
 		"DEV": lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#1D4ED8", Dark: "#93C5FD"}),

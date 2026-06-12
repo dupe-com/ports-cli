@@ -340,9 +340,6 @@ func (t portsTab) update(msg tea.KeyMsg) (portsTab, tea.Cmd) {
 			} else {
 				t.selected[k] = true
 			}
-			if t.cursor < len(t.visible)-1 {
-				t.cursor++
-			}
 		}
 	case "enter", "x":
 		targets := t.targets()
@@ -524,11 +521,11 @@ func (t portsTab) view(w, h int) string {
 }
 
 func (t portsTab) tableView(w, maxRows int) string {
-	cmdW := w - 57
+	cmdW := w - 58
 	if cmdW < 10 {
 		cmdW = 10
 	}
-	head := fmt.Sprintf("  %-7s %-9s %-8s %-10s %-7s %-9s %s",
+	head := fmt.Sprintf("   %-7s %-9s %-8s %-10s %-7s %-9s %s",
 		"PORT", "CAT", "PID", "USER", "UPTIME", "ADDR", "COMMAND")
 	rows := []string{sHeader.Render(truncate(head, w))}
 
@@ -605,34 +602,42 @@ func (t portsTab) tableView(w, maxRows int) string {
 		k := rowKey{l.PID, l.Port}
 		cat := categorize.Categorize(l.Port, l.Name, l.Cmdline)
 
+		// marks stay plain text — the whole row is styled once below, so no
+		// embedded escape codes can be sliced or counted as width
 		marks := " "
 		if t.cfg.IsFavorite(l.Port) {
-			marks = sStar.Render("★")
+			marks = "★"
 		}
 		sel := " "
 		if t.selected[k] {
-			sel = sSelected.Render("✓")
+			sel = "✓"
 		}
 		watch := ""
 		if t.cfg.IsWatched(l.Port) {
 			watch = " 👁"
 		}
+		cursorMark := " "
+		if item.visIdx == t.cursor {
+			cursorMark = "▸"
+		}
 
 		carried := categorize.IsCarrier(l.Name)
-		line := fmt.Sprintf("%s%s%-7d %-9s %-8d %-10s %-7s %-9s %s%s",
-			sel, marks, l.Port, catLabel(cat, carried), l.PID,
+		line := fmt.Sprintf("%s%s%s%-7d %-9s %-8d %-10s %-7s %-9s %s%s",
+			cursorMark, sel, marks, l.Port, catLabel(cat, carried), l.PID,
 			truncate(l.User, 10), l.Uptime(),
 			truncate(l.AddrSummary(), 9),
 			truncate(l.Name+" — "+l.Cmdline, cmdW), watch)
 
+		style := sRow
 		switch {
 		case item.visIdx == t.cursor:
-			rows = append(rows, sCursor.Render(truncate("▸"+line[1:], w)))
+			style = sCursor
+		case t.selected[k]:
+			style = sSelected
 		case carried:
-			rows = append(rows, sRowSSH.Render(truncate(line, w)))
-		default:
-			rows = append(rows, sRow.Render(truncate(line, w)))
+			style = sRowSSH
 		}
+		rows = append(rows, style.Render(truncate(line, w)))
 	}
 
 	if end < len(items) {
@@ -670,11 +675,11 @@ func (t portsTab) treeTableView(w, maxRows int) string {
 		items = append(items, renderItem{visIdx: vi})
 	}
 
-	cmdW := w - 35
+	cmdW := w - 36
 	if cmdW < 10 {
 		cmdW = 10
 	}
-	head := fmt.Sprintf("  %-7s %-9s %-9s %s", "PORT", "CAT", "ADDR", "COMMAND")
+	head := fmt.Sprintf("   %-7s %-9s %-9s %s", "PORT", "CAT", "ADDR", "COMMAND")
 	rows := []string{sHeader.Render(truncate(head, w))}
 
 	if len(t.visible) == 0 {
@@ -719,37 +724,40 @@ func (t portsTab) treeTableView(w, maxRows int) string {
 		k := rowKey{l.PID, l.Port}
 		cat := categorize.Categorize(l.Port, l.Name, l.Cmdline)
 
+		// plain marks, whole-row styling — see tableView
 		marks := " "
 		if t.cfg.IsFavorite(l.Port) {
-			marks = sStar.Render("★")
+			marks = "★"
 		}
 		sel := " "
 		if t.selected[k] {
-			sel = sSelected.Render("✓")
+			sel = "✓"
 		}
 		watch := ""
 		if t.cfg.IsWatched(l.Port) {
 			watch = " 👁"
 		}
+		cursorMark := " "
+		if item.visIdx == t.cursor {
+			cursorMark = "▸"
+		}
 
 		carried := categorize.IsCarrier(l.Name)
-		if item.visIdx == t.cursor {
-			cursorLine := fmt.Sprintf("  ▸%s %-7d %-9s %-9s %s%s",
-				marks, l.Port, catLabel(cat, carried),
-				truncate(l.AddrSummary(), 9),
-				truncate(l.Cmdline, cmdW), watch)
-			rows = append(rows, sCursor.Render(truncate(cursorLine, w)))
-		} else {
-			line := fmt.Sprintf("  %s%s %-7d %-9s %-9s %s%s",
-				sel, marks, l.Port, catLabel(cat, carried),
-				truncate(l.AddrSummary(), 9),
-				truncate(l.Cmdline, cmdW), watch)
-			if carried {
-				rows = append(rows, sRowSSH.Render(truncate(line, w)))
-			} else {
-				rows = append(rows, sRow.Render(truncate(line, w)))
-			}
+		line := fmt.Sprintf("  %s%s%s %-7d %-9s %-9s %s%s",
+			cursorMark, sel, marks, l.Port, catLabel(cat, carried),
+			truncate(l.AddrSummary(), 9),
+			truncate(l.Cmdline, cmdW), watch)
+
+		style := sRow
+		switch {
+		case item.visIdx == t.cursor:
+			style = sCursor
+		case t.selected[k]:
+			style = sSelected
+		case carried:
+			style = sRowSSH
 		}
+		rows = append(rows, style.Render(truncate(line, w)))
 	}
 
 	if len(items) > end {
