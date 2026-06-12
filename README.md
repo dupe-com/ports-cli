@@ -34,13 +34,17 @@ screen and clears it in one keypress.
 ```
  1 Ports    2 kubectl    3 cloudflared
 
-   PORT    CAT  PID      USER     UPTIME  ADDR      COMMAND
-  ▸3000    DEV  7881     ramin    17h     *         node — next dev
-  ★5432    DB   801      ramin    3d2h    127.0.0.1 postgres -D /opt/homebrew/var…
-   8080    WEB  81261    ramin    2h      *         mitmweb 👁
-   11434   DEV  39156    ramin    1d4h    127.0.0.1 ollama serve
+   PORT    CAT       PID      USER     UPTIME  ADDR      COMMAND
+  DEV · development servers (4)
+  ▸3000    DEV       7881     ramin    17h     *         node — next dev
+   3001    DEV (SSH) 50926    ramin    54m     127.0.0.1 ssh — ssh -fNT -L 3001:localhost:3001 studio
+   11434   DEV       39156    ramin    1d4h    127.0.0.1 ollama serve
+  WEB · web servers & proxies (1)
+   8080    WEB       81261    ramin    2h      *         mitmweb 👁
+  DB · databases & caches (1)
+  ★5432    DB        801      ramin    3d2h    127.0.0.1 postgres -D /opt/homebrew/var…
 
-  / filter · space sel · enter kill · d detail · f fav · w watch · c cat · r refresh
+  ▸ 11 system & misc ports hidden — ↓ past the end or a shows all
 ```
 
 ## Install
@@ -63,21 +67,33 @@ Every method installs the binary as **`ports`**.
 
 - ⚡ **Live table of every listening TCP port** — process, owner, uptime,
   CPU/mem, bind address. Auto-refreshes (configurable, pausable).
+- 🎯 **Focus mode by default** — the list is grouped by category (dev servers
+  first), and system daemons / unclassified ports are folded away until you
+  scroll past the end or press `a`. The ports you're hunting for, not 30 rows
+  of `rapportd`.
 - 🔪 **One-keypress kill** — graceful `SIGTERM` with a grace window, `F` to
-  escalate to `SIGKILL`. Multi-select with `space` to clear several at once.
+  escalate to `SIGKILL`. Multi-select with `space`, or `K` to clear
+  everything visible at once.
 - 🔍 **Fuzzy filter** (`/`) across port, process name, user, and full command
   line — plus a category filter (`c`) that cycles dev / web / db / messaging /
-  system.
+  tunnel / system. Filters always search everything, folded or not.
 - 🏷️ **Smart categorization** — postgres on a weird port is still a `DB`;
-  rules match the process first, well-known ports second.
-- ★ **Favorites** — pin the ports you care about to the top.
+  rules match the process first, well-known ports second. SSH forwards are
+  carriers: an `ssh -L` of your dev server shows as `DEV (SSH)` in a distinct
+  tint, and unrecognized forwarded ports get their own always-visible
+  `TUN · tunnels & forwards` group.
+- 🌳 **Tree view** (`t`) — group ports by owning process instead.
+- ★ **Favorites** — pin the ports you care about to the top of their group.
 - 👁️ **Watched ports** — get a desktop notification when a port starts or
   stops listening ("tell me when the dev server is actually up").
+- 📋 **Copy** (`y`) — put `localhost:PORT` on the clipboard.
 - ☸️ **Managed `kubectl port-forward` sessions** — create from a form, watch
   status live, view logs, and let them **auto-reconnect with backoff** when
-  the connection drops. No more dead forwards after a pod restart.
+  the connection drops. Save specs (`s`) to relaunch them in one keypress
+  next session. No more dead forwards after a pod restart.
 - ☁️ **Cloudflare Tunnel visibility** — see every running `cloudflared`,
-  named or quick, with its origin and config.
+  named or quick, with its origin and config. (Tunnels dial out, so they
+  never show up in a port scan — this tab is how you see them.)
 - 🤖 **Scriptable** — every feature has a flag-driven subcommand with
   `--json` output where it matters.
 
@@ -91,16 +107,21 @@ ports
 
 | Key | Action |
 | --- | --- |
-| `1` `2` `3` / `tab` | switch tabs (Ports / kubectl / cloudflared) |
+| `1` `2` `3` / `←→` / `tab` | switch tabs (Ports / kubectl / cloudflared) |
 | `↑↓` `j` `k` | move · `g`/`G` top/bottom |
-| `/` | fuzzy filter (esc clears) |
+| `a` | reveal/fold system & misc ports (`↓` past the end also reveals) |
+| `/` | fuzzy filter |
 | `c` | cycle category filter |
 | `space` | multi-select |
 | `enter` / `x` | kill — confirm with `y` (graceful) or `F` (force) |
-| `d` | detail pane (full cmdline, all ports held by the pid) |
+| `K` | kill everything visible (with confirmation) |
+| `y` | copy `localhost:PORT` to clipboard |
+| `t` | tree view — group ports by owning process |
+| `d` | hide/show detail pane (full cmdline, all ports held by the pid) |
 | `f` / `w` | toggle favorite ★ / watched 👁 |
 | `r` / `p` | refresh now / pause auto-refresh |
-| `n` | (kubectl tab) new managed port-forward |
+| `n` / `s` / `D` | (kubectl tab) new forward / save spec / delete saved spec |
+| `esc` | back out one layer: filter → fold → quit |
 | `?` | help |
 
 ### CLI
@@ -133,6 +154,12 @@ grace_period = "1500ms"     # SIGTERM → SIGKILL window
 notify = true               # desktop notifications
 favorites = [3000, 5432]
 watched = [8080]
+
+# saved kubectl port-forward specs (press s on a running session to add)
+[[forwards]]
+target = "svc/api"
+ports = ["8080:80"]
+namespace = "staging"
 ```
 
 Override the location with `$PORTS_CLI_CONFIG`.
@@ -142,6 +169,11 @@ Override the location with `$PORTS_CLI_CONFIG`.
 - **Discovery** — `lsof` field-output on macOS (the most reliable
   unprivileged source there), gopsutil's connection table elsewhere. You see
   the processes your user can see; run with `sudo` to see everything.
+- **Categorization** — process-name rules first, well-known-port rules second.
+  `ssh`/`autossh` are *carriers*: their name says nothing about what the port
+  is for, so the port rule decides (`3000` forwarded over ssh is still `DEV`),
+  and unmatched carried ports become `TUN` instead of being mistaken for
+  system noise.
 - **Kill** — `SIGTERM`, a grace window for clean shutdown, then opt-in
   `SIGKILL` for survivors. Multi-port processes are signalled once.
 - **Forward sessions** — children of the TUI/CLI process, supervised with
