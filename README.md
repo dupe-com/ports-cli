@@ -2,7 +2,7 @@
   <img src="assets/ports-cli.png" alt="ports-cli" width="200">
 </p>
 
-<h1 align="center">ports</h1>
+<h1 align="center">ports-cli</h1>
 
 <p align="center">
   <b>See what's listening. Reclaim the port. One keypress.</b><br>
@@ -70,6 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/dupe-com/ports-cli/main/install.sh 
 ```
 
 Or grab a binary from [Releases](https://github.com/dupe-com/ports-cli/releases).
+Every method installs the binary as **`ports`**.
 
 ## Usage
 
