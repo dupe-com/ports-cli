@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/ports-cli.png" alt="ports-cli" width="200">
+</p>
+
 <h1 align="center">ports</h1>
 
 <p align="center">
