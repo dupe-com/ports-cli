@@ -1,0 +1,152 @@
+// Package categorize buckets listeners into human-meaningful groups —
+// the "what kind of thing is squatting on this port" signal.
+package categorize
+
+import "strings"
+
+// Category is a coarse classification of a listening process.
+type Category string
+
+const (
+	Database    Category = "database"
+	WebServer   Category = "web"
+	Development Category = "dev"
+	Messaging   Category = "messaging"
+	System      Category = "system"
+	Other       Category = "other"
+)
+
+// All lists every category in display order.
+var All = []Category{Development, WebServer, Database, Messaging, System, Other}
+
+// Badge returns a short display label.
+func (c Category) Badge() string {
+	switch c {
+	case Database:
+		return "DB"
+	case WebServer:
+		return "WEB"
+	case Development:
+		return "DEV"
+	case Messaging:
+		return "MSG"
+	case System:
+		return "SYS"
+	default:
+		return "·"
+	}
+}
+
+// Parse maps a user-supplied string (flag value) to a Category.
+func Parse(s string) (Category, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "database", "db":
+		return Database, true
+	case "web", "webserver", "web-server":
+		return WebServer, true
+	case "dev", "development":
+		return Development, true
+	case "messaging", "msg", "queue":
+		return Messaging, true
+	case "system", "sys":
+		return System, true
+	case "other":
+		return Other, true
+	}
+	return Other, false
+}
+
+// nameRules match against the lowercase process name (substring). They take
+// precedence over port numbers — a postgres on a non-standard port is still
+// a database.
+var nameRules = []struct {
+	substr string
+	cat    Category
+}{
+	// databases & caches
+	{"postgres", Database}, {"mysqld", Database}, {"mariadb", Database},
+	{"redis", Database}, {"valkey", Database}, {"mongod", Database},
+	{"clickhouse", Database}, {"elasticsearch", Database}, {"opensearch", Database},
+	{"cockroach", Database}, {"memcached", Database}, {"influxd", Database},
+	{"meilisearch", Database}, {"typesense", Database},
+
+	// message brokers & queues
+	{"rabbitmq", Messaging}, {"kafka", Messaging}, {"nats-server", Messaging},
+	{"mosquitto", Messaging}, {"pulsar", Messaging}, {"beam.smp", Messaging},
+
+	// web servers & proxies
+	{"nginx", WebServer}, {"caddy", WebServer}, {"httpd", WebServer},
+	{"apache", WebServer}, {"traefik", WebServer}, {"haproxy", WebServer},
+	{"envoy", WebServer},
+
+	// development runtimes & tooling
+	{"node", Development}, {"bun", Development}, {"deno", Development},
+	{"vite", Development}, {"webpack", Development}, {"next", Development},
+	{"turbopack", Development}, {"esbuild", Development},
+	{"python", Development}, {"uvicorn", Development}, {"gunicorn", Development},
+	{"flask", Development}, {"django", Development},
+	{"ruby", Development}, {"puma", Development}, {"rails", Development},
+	{"php", Development}, {"java", Development}, {"gradle", Development},
+	{"cargo", Development}, {"go run", Development}, {"air", Development},
+	{"dlv", Development}, {"workerd", Development}, {"wrangler", Development},
+	{"miniflare", Development}, {"inngest", Development}, {"ngrok", Development},
+	{"docker", Development}, {"com.docker", Development}, {"colima", Development},
+	{"containerd", Development}, {"kubectl", Development}, {"tilt", Development},
+	{"mitmproxy", Development}, {"mitmweb", Development}, {"jest", Development},
+	{"playwright", Development}, {"storybook", Development}, {"ollama", Development},
+
+	// system daemons (macOS + linux staples)
+	{"sshd", System}, {"ssh", System}, {"launchd", System},
+	{"systemd", System}, {"controlce", System}, {"rapportd", System},
+	{"sharingd", System}, {"airplay", System}, {"mediasharingd", System},
+	{"cupsd", System}, {"bluetooth", System}, {"mdnsresponder", System},
+	{"tailscaled", System}, {"setapp", System}, {"dropbox", System},
+	{"onedrive", System}, {"spotify", System},
+}
+
+// portRules cover well-known ports, used when no name rule matched.
+var portRules = map[uint32]Category{
+	// web
+	80: WebServer, 443: WebServer, 8443: WebServer,
+	// databases
+	3306: Database, 5432: Database, 6379: Database, 27017: Database,
+	9200: Database, 9300: Database, 8529: Database, 7474: Database,
+	7687: Database, 5984: Database, 8086: Database, 9042: Database,
+	1521: Database, 1433: Database, 26257: Database, 8123: Database,
+	11211: Database,
+	// messaging
+	5672: Messaging, 15672: Messaging, 9092: Messaging, 4222: Messaging,
+	1883: Messaging, 61616: Messaging, 4150: Messaging,
+	// dev servers
+	3000: Development, 3001: Development, 4200: Development, 5173: Development,
+	5174: Development, 8000: Development, 8080: Development, 8081: Development,
+	8888: Development, 9229: Development, 6006: Development, 1313: Development,
+	4321: Development, 19000: Development, 19006: Development,
+	8787: Development, 8788: Development,
+	// system
+	22: System, 53: System, 88: System, 445: System, 548: System,
+	631: System, 3689: System, 5000: System, 5900: System, 7000: System,
+}
+
+// Categorize classifies a listener from its process name, cmdline, and port.
+func Categorize(port uint32, name, cmdline string) Category {
+	hay := strings.ToLower(name)
+	for _, r := range nameRules {
+		if strings.Contains(hay, r.substr) {
+			return r.cat
+		}
+	}
+	// A second pass over the cmdline catches interpreters running a known
+	// tool (e.g. "node /…/vite/bin/vite.js" when the name is just "node" —
+	// already dev — but also "python -m mitmproxy" style invocations).
+	hay = strings.ToLower(cmdline)
+	for _, r := range nameRules {
+		if strings.Contains(hay, r.substr) {
+			return r.cat
+		}
+	}
+	if c, ok := portRules[port]; ok {
+		return c
+	}
+	return Other
+}

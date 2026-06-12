@@ -1,0 +1,14 @@
+# build artifacts
+/bin/
+/dist/
+*.exe
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# test & profiling output
+*.out
+*.test
+coverage.html

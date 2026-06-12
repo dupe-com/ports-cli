@@ -1,0 +1,55 @@
+version: 2
+
+project_name: ports-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: ports
+    main: ./cmd/ports
+    binary: ports
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^chore:", "^ci:"]
+
+brews:
+  - name: ports-cli
+    binary: ports
+    repository:
+      owner: dupe-com
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
+    homepage: https://github.com/dupe-com/ports-cli
+    description: "Interactive TCP port manager — see what's listening, reclaim ports in one keypress"
+    license: MIT
+    install: |
+      bin.install "ports"
+    test: |
+      system "#{bin}/ports", "--version"
