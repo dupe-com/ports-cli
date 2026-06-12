@@ -524,11 +524,11 @@ func (t portsTab) view(w, h int) string {
 }
 
 func (t portsTab) tableView(w, maxRows int) string {
-	cmdW := w - 52
+	cmdW := w - 57
 	if cmdW < 10 {
 		cmdW = 10
 	}
-	head := fmt.Sprintf("  %-7s %-4s %-8s %-10s %-7s %-9s %s",
+	head := fmt.Sprintf("  %-7s %-9s %-8s %-10s %-7s %-9s %s",
 		"PORT", "CAT", "PID", "USER", "UPTIME", "ADDR", "COMMAND")
 	rows := []string{sHeader.Render(truncate(head, w))}
 
@@ -618,16 +618,19 @@ func (t portsTab) tableView(w, maxRows int) string {
 			watch = " 👁"
 		}
 
-		line := fmt.Sprintf("%s%s%-7d %-4s %-8d %-10s %-7s %-9s %s%s",
-			sel, marks, l.Port, cat.Badge(), l.PID,
+		carried := categorize.IsCarrier(l.Name)
+		line := fmt.Sprintf("%s%s%-7d %-9s %-8d %-10s %-7s %-9s %s%s",
+			sel, marks, l.Port, catLabel(cat, carried), l.PID,
 			truncate(l.User, 10), l.Uptime(),
 			truncate(l.AddrSummary(), 9),
 			truncate(l.Name+" — "+l.Cmdline, cmdW), watch)
 
-		if item.visIdx == t.cursor {
+		switch {
+		case item.visIdx == t.cursor:
 			rows = append(rows, sCursor.Render(truncate("▸"+line[1:], w)))
-		} else {
-			// recolor the badge after truncation-safe plain formatting
+		case carried:
+			rows = append(rows, sRowSSH.Render(truncate(line, w)))
+		default:
 			rows = append(rows, sRow.Render(truncate(line, w)))
 		}
 	}
@@ -667,11 +670,11 @@ func (t portsTab) treeTableView(w, maxRows int) string {
 		items = append(items, renderItem{visIdx: vi})
 	}
 
-	cmdW := w - 30
+	cmdW := w - 35
 	if cmdW < 10 {
 		cmdW = 10
 	}
-	head := fmt.Sprintf("  %-7s %-4s %-9s %s", "PORT", "CAT", "ADDR", "COMMAND")
+	head := fmt.Sprintf("  %-7s %-9s %-9s %s", "PORT", "CAT", "ADDR", "COMMAND")
 	rows := []string{sHeader.Render(truncate(head, w))}
 
 	if len(t.visible) == 0 {
@@ -729,18 +732,23 @@ func (t portsTab) treeTableView(w, maxRows int) string {
 			watch = " 👁"
 		}
 
+		carried := categorize.IsCarrier(l.Name)
 		if item.visIdx == t.cursor {
-			cursorLine := fmt.Sprintf("  ▸%s %-7d %-4s %-9s %s%s",
-				marks, l.Port, cat.Badge(),
+			cursorLine := fmt.Sprintf("  ▸%s %-7d %-9s %-9s %s%s",
+				marks, l.Port, catLabel(cat, carried),
 				truncate(l.AddrSummary(), 9),
 				truncate(l.Cmdline, cmdW), watch)
 			rows = append(rows, sCursor.Render(truncate(cursorLine, w)))
 		} else {
-			line := fmt.Sprintf("  %s%s %-7d %-4s %-9s %s%s",
-				sel, marks, l.Port, cat.Badge(),
+			line := fmt.Sprintf("  %s%s %-7d %-9s %-9s %s%s",
+				sel, marks, l.Port, catLabel(cat, carried),
 				truncate(l.AddrSummary(), 9),
 				truncate(l.Cmdline, cmdW), watch)
-			rows = append(rows, sRow.Render(truncate(line, w)))
+			if carried {
+				rows = append(rows, sRowSSH.Render(truncate(line, w)))
+			} else {
+				rows = append(rows, sRow.Render(truncate(line, w)))
+			}
 		}
 	}
 
@@ -761,9 +769,13 @@ func (t portsTab) detailView(w int) string {
 		portStrs[i] = fmt.Sprintf("%d", p)
 	}
 	cat := categorize.Categorize(l.Port, l.Name, l.Cmdline)
+	catCell := badge(cat.Badge())
+	if categorize.IsCarrier(l.Name) {
+		catCell += sRowSSH.Render(" · forwarded here over ssh — the server lives on the remote machine")
+	}
 	body := fmt.Sprintf(
 		"%s  pid %d · %s · %s\n%s\n\n%s %s\n%s cpu %.1f%% · mem %.1f%% · up %s\n%s %s",
-		sAccent.Render(l.Name), l.PID, l.User, badge(cat.Badge()),
+		sAccent.Render(l.Name), l.PID, l.User, catCell,
 		sDim.Render(wrap(l.Cmdline, w-4, 3)),
 		sHeader.Render("ports"), strings.Join(portStrs, ", "),
 		sHeader.Render("usage"), l.CPUPercent, l.MemPercent, l.Uptime(),
@@ -817,6 +829,15 @@ func (t portsTab) keybar() string {
 	}
 	parts = append(parts, keyHint("?", "help"))
 	return strings.Join(parts, keySep)
+}
+
+// catLabel renders the CAT cell: the badge, suffixed with (SSH) when the port
+// is only relayed here by an ssh forward. TUN already says tunnel.
+func catLabel(cat categorize.Category, carried bool) string {
+	if carried && cat != categorize.Tunnel {
+		return cat.Badge() + " (SSH)"
+	}
+	return cat.Badge()
 }
 
 // wrap soft-wraps s to width, keeping at most maxLines lines.

@@ -20,6 +20,10 @@ var (
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		BorderForeground(cDim).Padding(0, 2)
 
+	// rows whose port is only relayed here by an ssh forward — the process
+	// actually serving it lives on another machine
+	sRowSSH = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#8ED8EC"})
+
 	sHeader   = lipgloss.NewStyle().Bold(true).Foreground(cDim)
 	sCursor   = lipgloss.NewStyle().Bold(true).Background(cBadgeBG).Foreground(cText)
 	sSelected = lipgloss.NewStyle().Foreground(cAccent).Bold(true)

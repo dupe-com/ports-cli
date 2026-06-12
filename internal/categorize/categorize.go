@@ -186,6 +186,10 @@ var portRules = map[uint32]Category{
 // a dev port, not a system daemon). Unmatched carried ports are tunnels.
 var carriers = map[string]bool{"ssh": true, "autossh": true}
 
+// IsCarrier reports whether the process is a traffic carrier (ssh forward) —
+// the port is served by another machine and only relayed here.
+func IsCarrier(name string) bool { return carriers[strings.ToLower(name)] }
+
 // Categorize classifies a listener from its process name, cmdline, and port.
 func Categorize(port uint32, name, cmdline string) Category {
 	hay := strings.ToLower(name)
