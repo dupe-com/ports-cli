@@ -31,21 +31,9 @@ You run `bun dev` and ports 3000, 3001, and 8484 are "in use". By what?
 An orphaned SSH tunnel? Yesterday's dev server? `ports` answers in one
 screen and clears it in one keypress.
 
-```
- 1 Ports    2 kubectl    3 cloudflared
-
-   PORT    CAT       PID      USER     UPTIME  ADDR      COMMAND
-  DEV · development servers (4)
-  ▸3000    DEV       7881     ramin    17h     *         node — next dev
-   3001    DEV (SSH) 50926    ramin    54m     127.0.0.1 ssh — ssh -fNT -L 3001:localhost:3001 studio
-   11434   DEV       39156    ramin    1d4h    127.0.0.1 ollama serve
-  WEB · web servers & proxies (1)
-   8080    WEB       81261    ramin    2h      *         mitmweb 👁
-  DB · databases & caches (1)
-  ★5432    DB        801      ramin    3d2h    127.0.0.1 postgres -D /opt/homebrew/var…
-
-  ▸ 11 system & misc ports hidden — ↓ past the end or a shows all
-```
+<p align="center">
+  <img src="assets/screenshot.png" alt="ports TUI — category-grouped port list with ssh-forwarded dev ports, TUN group, detail pane, and folded system noise" width="900">
+</p>
 
 ## Install
 
