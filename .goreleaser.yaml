@@ -48,6 +48,8 @@ homebrew_casks:
     homepage: https://github.com/dupe-com/ports-cli
     description: "Interactive TCP port manager — see what's listening, reclaim ports in one keypress"
     license: MIT
+    # the archive ships a binary named "ports", not the project name
+    binaries: [ports]
     # unsigned binary: strip Gatekeeper quarantine on install (goreleaser docs)
     hooks:
       post:
