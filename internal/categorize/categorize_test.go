@@ -65,3 +65,25 @@ func TestBadges(t *testing.T) {
 		}
 	}
 }
+
+func TestRankOrdersMainCategoriesFirst(t *testing.T) {
+	order := []Category{Development, WebServer, Database, Messaging, System, Other}
+	for i := 1; i < len(order); i++ {
+		if order[i-1].Rank() >= order[i].Rank() {
+			t.Errorf("Rank(%s)=%d not < Rank(%s)=%d", order[i-1], order[i-1].Rank(), order[i], order[i].Rank())
+		}
+	}
+}
+
+func TestNoise(t *testing.T) {
+	for _, c := range []Category{Development, WebServer, Database, Messaging} {
+		if c.Noise() {
+			t.Errorf("%s should not be noise", c)
+		}
+	}
+	for _, c := range []Category{System, Other} {
+		if !c.Noise() {
+			t.Errorf("%s should be noise", c)
+		}
+	}
+}

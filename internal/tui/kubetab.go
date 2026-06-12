@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/dupe-com/ports-cli/internal/config"
 	"github.com/dupe-com/ports-cli/internal/kube"
 )
 
@@ -20,8 +21,18 @@ const (
 	fwdLogs
 )
 
+// fwdListItem represents either a live session or a saved (not-running) spec.
+type fwdListItem struct {
+	session  *kube.Session
+	savedIdx int                // index into cfg.Forwards; valid only when session == nil
+	saved    config.ForwardSpec // copy of spec; valid only when session == nil
+}
+
+func (item fwdListItem) isSaved() bool { return item.session == nil }
+
 type fwdTab struct {
 	mgr    *kube.Manager
+	cfg    *config.Config
 	mode   fwdMode
 	cursor int
 
@@ -39,8 +50,8 @@ type fwdTab struct {
 
 var formLabels = [4]string{"context (blank = current)", "namespace (blank = default)", "target — svc/api, pod/web-0, deploy/web", "ports — 8080:80 [, 5432 …]"}
 
-func newFwdTab(mgr *kube.Manager) fwdTab {
-	t := fwdTab{mgr: mgr, vp: viewport.New(80, 20)}
+func newFwdTab(mgr *kube.Manager, cfg *config.Config) fwdTab {
+	t := fwdTab{mgr: mgr, cfg: cfg, vp: viewport.New(80, 20)}
 	for i := range t.inputs {
 		ti := textinput.New()
 		ti.Placeholder = formLabels[i]
@@ -64,6 +75,38 @@ func (t fwdTab) captured() bool { return t.mode == fwdForm }
 // consumesEsc: the logs view uses esc to go back to the list.
 func (t fwdTab) consumesEsc() bool { return t.mode == fwdLogs }
 
+// buildItems returns live sessions first, then saved specs that aren't running.
+func (t fwdTab) buildItems() []fwdListItem {
+	sessions := t.mgr.List()
+	items := make([]fwdListItem, 0, len(sessions)+len(t.cfg.Forwards))
+	for _, s := range sessions {
+		items = append(items, fwdListItem{session: s, savedIdx: -1})
+	}
+	for i, spec := range t.cfg.Forwards {
+		running := false
+		for _, s := range sessions {
+			if s.Spec.Target == spec.Target &&
+				strings.Join(s.Spec.Ports, ",") == strings.Join(spec.Ports, ",") &&
+				s.Spec.Namespace == spec.Namespace &&
+				s.Spec.Context == spec.Context {
+				running = true
+				break
+			}
+		}
+		if !running {
+			items = append(items, fwdListItem{savedIdx: i, saved: spec})
+		}
+	}
+	return items
+}
+
+func (t fwdTab) curItem(items []fwdListItem) (fwdListItem, bool) {
+	if t.cursor < 0 || t.cursor >= len(items) {
+		return fwdListItem{}, false
+	}
+	return items[t.cursor], true
+}
+
 func (t fwdTab) update(msg tea.KeyMsg) (fwdTab, tea.Cmd) {
 	switch t.mode {
 	case fwdForm:
@@ -75,14 +118,17 @@ func (t fwdTab) update(msg tea.KeyMsg) (fwdTab, tea.Cmd) {
 }
 
 func (t fwdTab) updateList(msg tea.KeyMsg) (fwdTab, tea.Cmd) {
-	sessions := t.mgr.List()
+	items := t.buildItems()
+	if t.cursor >= len(items) && len(items) > 0 {
+		t.cursor = len(items) - 1
+	}
 	switch msg.String() {
 	case "up", "k":
 		if t.cursor > 0 {
 			t.cursor--
 		}
 	case "down", "j":
-		if t.cursor < len(sessions)-1 {
+		if t.cursor < len(items)-1 {
 			t.cursor++
 		}
 	case "n":
@@ -94,23 +140,61 @@ func (t fwdTab) updateList(msg tea.KeyMsg) (fwdTab, tea.Cmd) {
 		}
 		t.inputs[0].Focus()
 		return t, textinput.Blink
-	case "x":
-		if s, ok := t.curSession(sessions); ok {
-			_ = t.mgr.Stop(s.ID)
-			return t, flash("stopped " + s.Spec.Label())
+	case "s":
+		if item, ok := t.curItem(items); ok && !item.isSaved() {
+			spec := config.ForwardSpec{
+				Target:    item.session.Spec.Target,
+				Ports:     item.session.Spec.Ports,
+				Namespace: item.session.Spec.Namespace,
+				Context:   item.session.Spec.Context,
+			}
+			if err := t.cfg.SaveForward(spec); err != nil {
+				return t, flash("save failed: " + err.Error())
+			}
+			return t, flash("saved " + spec.Target)
 		}
-	case "X":
-		if s, ok := t.curSession(sessions); ok {
-			t.mgr.Remove(s.ID)
-			if t.cursor > 0 {
+	case "D":
+		if item, ok := t.curItem(items); ok && item.isSaved() {
+			if err := t.cfg.RemoveForward(item.savedIdx); err != nil {
+				return t, flash("remove failed: " + err.Error())
+			}
+			newItems := t.buildItems()
+			if t.cursor >= len(newItems) && t.cursor > 0 {
 				t.cursor--
 			}
-			return t, flash("removed " + s.Spec.Label())
+			return t, flash("removed saved spec")
+		}
+	case "x":
+		if item, ok := t.curItem(items); ok && !item.isSaved() {
+			_ = t.mgr.Stop(item.session.ID)
+			return t, flash("stopped " + item.session.Spec.Label())
+		}
+	case "X":
+		if item, ok := t.curItem(items); ok && !item.isSaved() {
+			t.mgr.Remove(item.session.ID)
+			newItems := t.buildItems()
+			if t.cursor >= len(newItems) && t.cursor > 0 {
+				t.cursor--
+			}
+			return t, flash("removed " + item.session.Spec.Label())
 		}
 	case "enter", "l":
-		if s, ok := t.curSession(sessions); ok {
+		if item, ok := t.curItem(items); ok {
+			if item.isSaved() {
+				ks := kube.Spec{
+					Target:    item.saved.Target,
+					Ports:     item.saved.Ports,
+					Namespace: item.saved.Namespace,
+					Context:   item.saved.Context,
+				}
+				s, err := t.mgr.Start(ks)
+				if err != nil {
+					return t, flash("start failed: " + err.Error())
+				}
+				return t, flash("starting " + s.Spec.Label())
+			}
 			t.mode = fwdLogs
-			t.logsFor = s.ID
+			t.logsFor = item.session.ID
 			t.refreshLogs()
 			t.vp.GotoBottom()
 		}
@@ -177,13 +261,6 @@ func (t *fwdTab) refreshLogs() {
 	}
 }
 
-func (t fwdTab) curSession(sessions []*kube.Session) (*kube.Session, bool) {
-	if t.cursor < 0 || t.cursor >= len(sessions) {
-		return nil, false
-	}
-	return sessions[t.cursor], true
-}
-
 // ── rendering ──────────────────────────────────────────────────────────────
 
 func (t fwdTab) view(w, h int) string {
@@ -197,41 +274,53 @@ func (t fwdTab) view(w, h int) string {
 }
 
 func (t fwdTab) listView(w, _ int) string {
-	sessions := t.mgr.List()
-	if len(sessions) == 0 {
+	items := t.buildItems()
+	if len(items) == 0 {
 		return sDim.Render("\n  no kubectl port-forward sessions — press " +
 			sAccent.Render("n") + sDim.Render(" to create one\n\n  sessions live as children of this TUI and auto-reconnect on drop"))
 	}
 	head := fmt.Sprintf("  %-12s %-26s %-14s %-10s %-8s %-8s %s",
 		"STATUS", "TARGET", "PORTS", "NS", "CTX", "UP", "RESTARTS")
 	rows := []string{sHeader.Render(truncate(head, w))}
-	for i, s := range sessions {
-		st := s.Status()
-		stStr := string(st)
-		switch st {
-		case kube.StatusConnected:
-			stStr = sOK.Render("● " + stStr)
-		case kube.StatusConnecting, kube.StatusReconnecting:
-			stStr = sWarn.Render("◌ " + stStr)
-		case kube.StatusFailed:
-			stStr = sDanger.Render("✕ " + stStr)
-		default:
-			stStr = sDim.Render("○ " + stStr)
+	for i, item := range items {
+		var line string
+		if item.isSaved() {
+			spec := item.saved
+			line = fmt.Sprintf("  %-12s %-26s %-14s %-10s %-8s",
+				sDim.Render("○ saved"),
+				truncate(spec.Target, 26),
+				truncate(strings.Join(spec.Ports, ","), 14),
+				truncate(orDash(spec.Namespace), 10),
+				truncate(orDash(spec.Context), 8))
+		} else {
+			s := item.session
+			st := s.Status()
+			stStr := string(st)
+			switch st {
+			case kube.StatusConnected:
+				stStr = sOK.Render("● " + stStr)
+			case kube.StatusConnecting, kube.StatusReconnecting:
+				stStr = sWarn.Render("◌ " + stStr)
+			case kube.StatusFailed:
+				stStr = sDanger.Render("✕ " + stStr)
+			default:
+				stStr = sDim.Render("○ " + stStr)
+			}
+			line = fmt.Sprintf("  %-12s %-26s %-14s %-10s %-8s %-8s %d",
+				stStr,
+				truncate(s.Spec.Target, 26),
+				truncate(strings.Join(s.Spec.Ports, ","), 14),
+				truncate(orDash(s.Spec.Namespace), 10),
+				truncate(orDash(s.Spec.Context), 8),
+				fmtAgo(s.StartedAt()),
+				s.Restarts())
 		}
-		line := fmt.Sprintf("  %-12s %-26s %-14s %-10s %-8s %-8s %d",
-			stStr,
-			truncate(s.Spec.Target, 26),
-			truncate(strings.Join(s.Spec.Ports, ","), 14),
-			truncate(orDash(s.Spec.Namespace), 10),
-			truncate(orDash(s.Spec.Context), 8),
-			fmtAgo(s.StartedAt()),
-			s.Restarts())
 		if i == t.cursor {
 			line = sCursor.Render("▸" + line[1:])
 		}
 		rows = append(rows, line)
-		if i == t.cursor && s.LastError() != "" {
-			rows = append(rows, sDim.Render("     ↳ "+truncate(s.LastError(), w-8)))
+		if i == t.cursor && !item.isSaved() && item.session.LastError() != "" {
+			rows = append(rows, sDim.Render("     ↳ "+truncate(item.session.LastError(), w-8)))
 		}
 	}
 	return strings.Join(rows, "\n")
@@ -271,7 +360,7 @@ func (t fwdTab) keybar() string {
 	case fwdForm:
 		return "tab next · enter start · esc cancel"
 	}
-	return "n new · enter logs · x stop · X remove · ? help"
+	return "n new · enter start/logs · s save · D del saved · x stop · X remove · ? help"
 }
 
 func splitPorts(s string) []string {

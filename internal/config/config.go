@@ -11,6 +11,14 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// ForwardSpec is a saved kubectl port-forward configuration.
+type ForwardSpec struct {
+	Target    string   `toml:"target"`
+	Ports     []string `toml:"ports"`
+	Namespace string   `toml:"namespace,omitempty"`
+	Context   string   `toml:"context,omitempty"`
+}
+
 // Config is the on-disk shape. Zero values are replaced by defaults on Load.
 type Config struct {
 	// RefreshInterval is the TUI auto-refresh cadence, e.g. "2s". "0" disables.
@@ -24,6 +32,8 @@ type Config struct {
 	Favorites []uint32 `toml:"favorites"`
 	// Watched ports fire a notification when they start/stop listening.
 	Watched []uint32 `toml:"watched"`
+	// Forwards are saved kubectl port-forward specs, persisted for reuse.
+	Forwards []ForwardSpec `toml:"forwards"`
 
 	path string `toml:"-"`
 }
@@ -125,6 +135,27 @@ func (c *Config) ToggleWatched(port uint32) (bool, error) {
 	return on, c.Save()
 }
 
+// SaveForward appends spec to Forwards and persists; no-op if already saved.
+func (c *Config) SaveForward(spec ForwardSpec) error {
+	for _, f := range c.Forwards {
+		if f.Target == spec.Target && equalPorts(f.Ports, spec.Ports) &&
+			f.Namespace == spec.Namespace && f.Context == spec.Context {
+			return nil
+		}
+	}
+	c.Forwards = append(c.Forwards, spec)
+	return c.Save()
+}
+
+// RemoveForward removes the saved spec at idx and persists.
+func (c *Config) RemoveForward(idx int) error {
+	if idx < 0 || idx >= len(c.Forwards) {
+		return nil
+	}
+	c.Forwards = append(c.Forwards[:idx], c.Forwards[idx+1:]...)
+	return c.Save()
+}
+
 func containsPort(ps []uint32, p uint32) bool {
 	for _, v := range ps {
 		if v == p {
@@ -132,6 +163,18 @@ func containsPort(ps []uint32, p uint32) bool {
 		}
 	}
 	return false
+}
+
+func equalPorts(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func togglePort(ps []uint32, p uint32) ([]uint32, bool) {

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -34,6 +35,9 @@ type portsTab struct {
 	catFilter int // index into catCycle; 0 = all
 
 	showDetail bool
+	treeView   bool
+	showAll    bool // reveal noise (system/unclassified) rows
+	hiddenN    int  // noise rows folded away by the last applyFilter
 	paused     bool
 	scanErr    string
 
@@ -64,8 +68,11 @@ func newPortsTab(cfg *config.Config) portsTab {
 
 func (t portsTab) captured() bool { return t.filtering || t.confirming }
 
-// consumesEsc: an applied (but unfocused) filter is something esc can clear.
-func (t portsTab) consumesEsc() bool { return t.filter.Value() != "" || t.catFilter != 0 }
+// consumesEsc: an applied (but unfocused) filter or an expanded noise fold is
+// something esc can step back from.
+func (t portsTab) consumesEsc() bool {
+	return t.filter.Value() != "" || t.catFilter != 0 || t.showAll
+}
 
 // ── data plumbing ──────────────────────────────────────────────────────────
 
@@ -109,23 +116,60 @@ func (t portsTab) onKillDone(msg killDoneMsg) (portsTab, tea.Cmd) {
 	return t, tea.Batch(flash(text), scanCmd)
 }
 
-// sortListeners puts favorites first, then ascending port.
+// sortListeners groups by category (dev first, noise last) with favorites at
+// the top of their category (flat mode), or groups by PID in tree mode.
 func (t *portsTab) sortListeners() {
+	if t.treeView {
+		t.sortListenersTree()
+		return
+	}
 	sort.SliceStable(t.listeners, func(i, j int) bool {
-		fi, fj := t.cfg.IsFavorite(t.listeners[i].Port), t.cfg.IsFavorite(t.listeners[j].Port)
+		li, lj := t.listeners[i], t.listeners[j]
+		ri := categorize.Categorize(li.Port, li.Name, li.Cmdline).Rank()
+		rj := categorize.Categorize(lj.Port, lj.Name, lj.Cmdline).Rank()
+		if ri != rj {
+			return ri < rj
+		}
+		fi, fj := t.cfg.IsFavorite(li.Port), t.cfg.IsFavorite(lj.Port)
 		if fi != fj {
 			return fi
 		}
-		if t.listeners[i].Port != t.listeners[j].Port {
-			return t.listeners[i].Port < t.listeners[j].Port
+		if li.Port != lj.Port {
+			return li.Port < lj.Port
 		}
-		return t.listeners[i].PID < t.listeners[j].PID
+		return li.PID < lj.PID
+	})
+}
+
+// sortListenersTree groups by PID (PID groups with any favorite port sort first),
+// then PID ascending, then port ascending within each group.
+func (t *portsTab) sortListenersTree() {
+	favPIDs := map[int32]bool{}
+	for _, l := range t.listeners {
+		if t.cfg.IsFavorite(l.Port) {
+			favPIDs[l.PID] = true
+		}
+	}
+	sort.SliceStable(t.listeners, func(i, j int) bool {
+		li, lj := t.listeners[i], t.listeners[j]
+		fi, fj := favPIDs[li.PID], favPIDs[lj.PID]
+		if fi != fj {
+			return fi
+		}
+		if li.PID != lj.PID {
+			return li.PID < lj.PID
+		}
+		return li.Port < lj.Port
 	})
 }
 
 // applyFilter recomputes visible from the fuzzy query + category filter.
+// With no filters active (and not in tree view), noise rows — system daemons
+// and unclassified ports — are folded away unless showAll is set; favorites,
+// watched ports, and current selections always stay visible.
 func (t *portsTab) applyFilter() {
 	t.visible = t.visible[:0]
+	t.hiddenN = 0
 	cat := catCycle[t.catFilter]
 
 	candidates := make([]int, 0, len(t.listeners))
@@ -138,6 +182,19 @@ func (t *portsTab) applyFilter() {
 
 	q := strings.TrimSpace(t.filter.Value())
 	if q == "" {
+		if cat == "" && !t.treeView && !t.showAll {
+			for _, idx := range candidates {
+				l := t.listeners[idx]
+				c := categorize.Categorize(l.Port, l.Name, l.Cmdline)
+				if c.Noise() && !t.cfg.IsFavorite(l.Port) && !t.cfg.IsWatched(l.Port) &&
+					!t.selected[rowKey{l.PID, l.Port}] {
+					t.hiddenN++
+					continue
+				}
+				t.visible = append(t.visible, idx)
+			}
+			return
+		}
 		t.visible = candidates
 		return
 	}
@@ -222,9 +279,14 @@ func (t portsTab) update(msg tea.KeyMsg) (portsTab, tea.Cmd) {
 
 	switch msg.String() {
 	case "esc":
-		// clear applied filters (focused-filter esc is handled in updateFilter)
-		t.filter.SetValue("")
-		t.catFilter = 0
+		// step back one layer: clear applied filters first, then re-fold noise
+		// (focused-filter esc is handled in updateFilter)
+		if t.filter.Value() != "" || t.catFilter != 0 {
+			t.filter.SetValue("")
+			t.catFilter = 0
+		} else if t.showAll {
+			t.showAll = false
+		}
 		t.applyFilter()
 		t.clampCursor()
 	case "up", "k":
@@ -234,6 +296,15 @@ func (t portsTab) update(msg tea.KeyMsg) (portsTab, tea.Cmd) {
 	case "down", "j":
 		if t.cursor < len(t.visible)-1 {
 			t.cursor++
+		} else if t.hiddenN > 0 {
+			// scrolling past the end reveals the folded noise rows
+			n := t.hiddenN
+			t.showAll = true
+			t.applyFilter()
+			if t.cursor < len(t.visible)-1 {
+				t.cursor++
+			}
+			return t, flash(fmt.Sprintf("revealed %d system & misc ports — esc re-hides", n))
 		}
 	case "g":
 		t.cursor = 0
@@ -248,6 +319,19 @@ func (t portsTab) update(msg tea.KeyMsg) (portsTab, tea.Cmd) {
 		t.catFilter = (t.catFilter + 1) % len(catCycle)
 		t.applyFilter()
 		t.clampCursor()
+	case "t":
+		t.treeView = !t.treeView
+		t.sortListeners()
+		t.applyFilter()
+		t.clampCursor()
+	case "a":
+		t.showAll = !t.showAll
+		t.applyFilter()
+		t.clampCursor()
+		if t.showAll {
+			return t, flash("showing all ports")
+		}
+		return t, flash("focus mode — system & misc ports hidden")
 	case "space":
 		if l, ok := t.cur(); ok {
 			k := rowKey{l.PID, l.Port}
@@ -265,6 +349,23 @@ func (t portsTab) update(msg tea.KeyMsg) (portsTab, tea.Cmd) {
 		if len(targets) > 0 {
 			t.confirming = true
 			t.pending = targets
+		}
+	case "K":
+		if len(t.visible) > 0 {
+			targets := make([]netscan.Listener, 0, len(t.visible))
+			for _, idx := range t.visible {
+				targets = append(targets, t.listeners[idx])
+			}
+			t.confirming = true
+			t.pending = targets
+		}
+	case "y":
+		if l, ok := t.cur(); ok {
+			text := fmt.Sprintf("localhost:%d", l.Port)
+			if err := clipboard.WriteAll(text); err != nil {
+				return t, flash("clipboard error: " + err.Error())
+			}
+			return t, flash("copied " + text)
 		}
 	case "d":
 		t.showDetail = !t.showDetail
@@ -411,7 +512,11 @@ func (t portsTab) view(w, h int) string {
 		tableH = 3
 	}
 
-	sections = append(sections, t.tableView(w, tableH))
+	if t.treeView {
+		sections = append(sections, t.treeTableView(w, tableH))
+	} else {
+		sections = append(sections, t.tableView(w, tableH))
+	}
 	if t.showDetail {
 		sections = append(sections, t.detailView(w))
 	}
@@ -429,25 +534,74 @@ func (t portsTab) tableView(w, maxRows int) string {
 
 	if len(t.visible) == 0 {
 		empty := "nothing is listening 🎉"
-		if t.filter.Value() != "" || t.catFilter != 0 {
+		switch {
+		case t.filter.Value() != "" || t.catFilter != 0:
 			empty = "no matches — esc clears the filter, c cycles categories"
+		case t.hiddenN > 0:
+			empty = fmt.Sprintf("%d background ports hidden — ↓ or a shows them", t.hiddenN)
 		}
 		rows = append(rows, sDim.Render("  "+empty))
 		return strings.Join(rows, "\n")
 	}
 
-	// scroll window around the cursor
-	start := 0
-	if t.cursor >= maxRows {
-		start = t.cursor - maxRows + 1
+	// Interleave category section headers (visual only — the cursor walks
+	// t.visible, exactly like tree view). Fuzzy results are ranked by match
+	// score, so headers only make sense without a query.
+	type renderItem struct {
+		isHeader bool
+		cat      categorize.Category
+		count    int
+		visIdx   int
 	}
-	end := start + maxRows
-	if end > len(t.visible) {
-		end = len(t.visible)
+	grouped := strings.TrimSpace(t.filter.Value()) == ""
+	var items []renderItem
+	if grouped {
+		counts := map[categorize.Category]int{}
+		cats := make([]categorize.Category, len(t.visible))
+		for i, idx := range t.visible {
+			l := t.listeners[idx]
+			cats[i] = categorize.Categorize(l.Port, l.Name, l.Cmdline)
+			counts[cats[i]]++
+		}
+		var last categorize.Category = "\x00"
+		for vi := range t.visible {
+			if cats[vi] != last {
+				items = append(items, renderItem{isHeader: true, cat: cats[vi], count: counts[cats[vi]]})
+				last = cats[vi]
+			}
+			items = append(items, renderItem{visIdx: vi})
+		}
+	} else {
+		for vi := range t.visible {
+			items = append(items, renderItem{visIdx: vi})
+		}
 	}
 
-	for vi := start; vi < end; vi++ {
-		l := t.listeners[t.visible[vi]]
+	// scroll window around the cursor's render position
+	cursorItemIdx := 0
+	for i, item := range items {
+		if !item.isHeader && item.visIdx == t.cursor {
+			cursorItemIdx = i
+			break
+		}
+	}
+	start := 0
+	if cursorItemIdx >= maxRows {
+		start = cursorItemIdx - maxRows + 1
+	}
+	end := start + maxRows
+	if end > len(items) {
+		end = len(items)
+	}
+
+	for i := start; i < end; i++ {
+		item := items[i]
+		if item.isHeader {
+			tail := fmt.Sprintf(" · %s (%d)", item.cat.Title(), item.count)
+			rows = append(rows, " "+badge(item.cat.Badge())+sDim.Render(truncate(tail, w-6)))
+			continue
+		}
+		l := t.listeners[t.visible[item.visIdx]]
 		k := rowKey{l.PID, l.Port}
 		cat := categorize.Categorize(l.Port, l.Name, l.Cmdline)
 
@@ -470,7 +624,7 @@ func (t portsTab) tableView(w, maxRows int) string {
 			truncate(l.AddrSummary(), 9),
 			truncate(l.Name+" — "+l.Cmdline, cmdW), watch)
 
-		if vi == t.cursor {
+		if item.visIdx == t.cursor {
 			rows = append(rows, sCursor.Render(truncate("▸"+line[1:], w)))
 		} else {
 			// recolor the badge after truncation-safe plain formatting
@@ -478,8 +632,120 @@ func (t portsTab) tableView(w, maxRows int) string {
 		}
 	}
 
-	if len(t.visible) > maxRows {
-		rows = append(rows, sDim.Render(fmt.Sprintf("  … %d/%d (scroll with j/k)", end, len(t.visible))))
+	if end < len(items) {
+		rows = append(rows, sDim.Render(fmt.Sprintf("  … %d/%d (scroll with j/k)", end, len(items))))
+	}
+	if t.hiddenN > 0 {
+		rows = append(rows, sDim.Render(fmt.Sprintf("  ▸ %d system & misc ports hidden — ↓ past the end or a shows all", t.hiddenN)))
+	}
+	return strings.Join(rows, "\n")
+}
+
+// treeTableView renders listeners grouped by PID, with a process header per group.
+// The cursor/selection/kill logic is unchanged — visible indices are still the
+// unit of navigation; group headers are purely visual.
+func (t portsTab) treeTableView(w, maxRows int) string {
+	type renderItem struct {
+		isHeader bool
+		pid      int32 // header: PID being introduced
+		visIdx   int   // row: index into t.visible (matches t.cursor)
+	}
+
+	// Build pid→first-listener map and render item list in one pass.
+	pidInfo := map[int32]netscan.Listener{}
+	var items []renderItem
+	var lastPID int32 = -1
+	for vi, idx := range t.visible {
+		l := t.listeners[idx]
+		if l.PID != lastPID {
+			items = append(items, renderItem{isHeader: true, pid: l.PID})
+			if _, seen := pidInfo[l.PID]; !seen {
+				pidInfo[l.PID] = l
+			}
+			lastPID = l.PID
+		}
+		items = append(items, renderItem{visIdx: vi})
+	}
+
+	cmdW := w - 30
+	if cmdW < 10 {
+		cmdW = 10
+	}
+	head := fmt.Sprintf("  %-7s %-4s %-9s %s", "PORT", "CAT", "ADDR", "COMMAND")
+	rows := []string{sHeader.Render(truncate(head, w))}
+
+	if len(t.visible) == 0 {
+		empty := "nothing is listening 🎉"
+		if t.filter.Value() != "" || t.catFilter != 0 {
+			empty = "no matches — esc clears the filter, c cycles categories"
+		}
+		rows = append(rows, sDim.Render("  "+empty))
+		return strings.Join(rows, "\n")
+	}
+
+	// Find the cursor's position in the render list for scroll calculation.
+	cursorItemIdx := 0
+	for i, item := range items {
+		if !item.isHeader && item.visIdx == t.cursor {
+			cursorItemIdx = i
+			break
+		}
+	}
+
+	start := 0
+	if cursorItemIdx >= maxRows {
+		start = cursorItemIdx - maxRows + 1
+	}
+	end := start + maxRows
+	if end > len(items) {
+		end = len(items)
+	}
+
+	for i := start; i < end; i++ {
+		item := items[i]
+		if item.isHeader {
+			l := pidInfo[item.pid]
+			header := fmt.Sprintf("  %s  pid %d · %s · up %s · cpu %.1f%% · mem %.1f%%",
+				sAccent.Render(l.Name), l.PID, l.User, l.Uptime(), l.CPUPercent, l.MemPercent)
+			rows = append(rows, sHeader.Render(truncate(header, w)))
+			continue
+		}
+
+		idx := t.visible[item.visIdx]
+		l := t.listeners[idx]
+		k := rowKey{l.PID, l.Port}
+		cat := categorize.Categorize(l.Port, l.Name, l.Cmdline)
+
+		marks := " "
+		if t.cfg.IsFavorite(l.Port) {
+			marks = sStar.Render("★")
+		}
+		sel := " "
+		if t.selected[k] {
+			sel = sSelected.Render("✓")
+		}
+		watch := ""
+		if t.cfg.IsWatched(l.Port) {
+			watch = " 👁"
+		}
+
+		if item.visIdx == t.cursor {
+			cursorLine := fmt.Sprintf("  ▸%s %-7d %-4s %-9s %s%s",
+				marks, l.Port, cat.Badge(),
+				truncate(l.AddrSummary(), 9),
+				truncate(l.Cmdline, cmdW), watch)
+			rows = append(rows, sCursor.Render(truncate(cursorLine, w)))
+		} else {
+			line := fmt.Sprintf("  %s%s %-7d %-4s %-9s %s%s",
+				sel, marks, l.Port, cat.Badge(),
+				truncate(l.AddrSummary(), 9),
+				truncate(l.Cmdline, cmdW), watch)
+			rows = append(rows, sRow.Render(truncate(line, w)))
+		}
+	}
+
+	if len(items) > end {
+		rows = append(rows, sDim.Render("  … (scroll with j/k)"))
 	}
 	return strings.Join(rows, "\n")
 }
@@ -526,11 +792,17 @@ func (t portsTab) confirmView() string {
 }
 
 func (t portsTab) keybar() string {
-	parts := []string{"/ filter", "space sel", "enter kill", "d detail", "f fav", "w watch", "c cat", "r refresh"}
+	parts := []string{"/ filter", "space sel", "enter kill", "K kill-all", "y copy", "t tree", "a all", "d detail", "f fav", "w watch", "c cat", "r refresh"}
 	if t.paused {
 		parts = append(parts, sWarn.Render("p resume ⏸"))
 	} else {
 		parts = append(parts, "p pause")
+	}
+	if t.treeView {
+		parts = append(parts, sAccent.Render("tree ✦"))
+	}
+	if t.showAll {
+		parts = append(parts, sAccent.Render("all ✦"))
 	}
 	if cat := catCycle[t.catFilter]; cat != "" {
 		parts = append(parts, sAccent.Render("cat:"+string(cat)))

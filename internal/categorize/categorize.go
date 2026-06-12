@@ -37,6 +37,47 @@ func (c Category) Badge() string {
 	}
 }
 
+// Rank orders categories for grouped display — the things a developer is
+// usually hunting for come first.
+func (c Category) Rank() int {
+	switch c {
+	case Development:
+		return 0
+	case WebServer:
+		return 1
+	case Database:
+		return 2
+	case Messaging:
+		return 3
+	case System:
+		return 4
+	default:
+		return 5
+	}
+}
+
+// Noise reports whether the category is background noise (system daemons,
+// unclassified) rather than something a developer typically came to find.
+func (c Category) Noise() bool { return c == System || c == Other }
+
+// Title is the human-friendly group heading for the category.
+func (c Category) Title() string {
+	switch c {
+	case Development:
+		return "development servers"
+	case WebServer:
+		return "web servers & proxies"
+	case Database:
+		return "databases & caches"
+	case Messaging:
+		return "messaging & queues"
+	case System:
+		return "system daemons"
+	default:
+		return "uncategorized"
+	}
+}
+
 // Parse maps a user-supplied string (flag value) to a Category.
 func Parse(s string) (Category, bool) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
