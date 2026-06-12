@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	rtrunc "github.com/muesli/reflow/truncate"
 
 	"github.com/dupe-com/ports-cli/internal/config"
 	"github.com/dupe-com/ports-cli/internal/kube"
@@ -333,12 +334,9 @@ func truncate(s string, w int) string {
 	if w <= 1 || lipgloss.Width(s) <= w {
 		return s
 	}
-	// rune-safe trim; ANSI-styled strings are never passed here pre-styling
-	r := []rune(s)
-	if len(r) <= w-1 {
-		return s
-	}
-	return string(r[:w-1]) + "…"
+	// ANSI-aware: styled strings (keybar hints, badges) must not have their
+	// escape codes counted as width or sliced mid-sequence
+	return rtrunc.StringWithTail(s, uint(w), "…")
 }
 
 func fmtAgo(t time.Time) string {

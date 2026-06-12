@@ -332,7 +332,7 @@ func (t portsTab) update(msg tea.KeyMsg) (portsTab, tea.Cmd) {
 			return t, flash("showing all ports")
 		}
 		return t, flash("focus mode — system & misc ports hidden")
-	case "space":
+	case "space", " ": // bubbletea reports the spacebar as a literal " "
 		if l, ok := t.cur(); ok {
 			k := rowKey{l.PID, l.Port}
 			if t.selected[k] {
