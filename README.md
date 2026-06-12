@@ -181,6 +181,15 @@ make snapshot   # goreleaser snapshot build
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Related
+
+ports-cli grew out of the port-killer script in
+[**agent-mac-ops**](https://github.com/dupe-com/agent-mac-ops) — a toolkit for
+operating an always-on Mac remotely (agent-driven ops, native terminal
+sessions, browser/clipboard handoff, port forwarding). If you're clearing
+ports on a remote dev box over ssh, you probably want both: agent-mac-ops
+creates the forwards, ports-cli is how you see them (`DEV (SSH)` rows).
+
 ## License
 
 [MIT](LICENSE) © Dupe, Inc.
